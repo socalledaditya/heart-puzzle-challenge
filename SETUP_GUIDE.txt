@@ -1,0 +1,211 @@
+=====================================================================
+ HEART PUZZLE CHALLENGE  -  MERN STACK  -  SETUP & EVENT-DAY GUIDE
+=====================================================================
+Built for: Guest lecture, BSc Cardiology students.
+Stack    : MongoDB + Express 5 + React 18 (Vite) + Node.js 20/22
+Extras   : Socket.io (real-time), JWT access+refresh tokens (httpOnly
+           cookie), bcrypt, Zod validation, Helmet, rate limiting,
+           Nodemailer (OTP e-mail), PDFKit (certificates), Archiver (ZIP)
+
+---------------------------------------------------------------------
+ 1. WHAT THE SYSTEM DOES
+---------------------------------------------------------------------
+PLAYERS (role "user")
+  * Register with name, college e-mail, roll number, password and the
+    EVENT CODE that you display at the venue.
+  * Account is created only after a 6-digit OTP sent to the e-mail is
+    entered (expires in 10 min, 5 tries, 60 s resend cooldown).
+    => Fake / typo registrations cannot log in.
+  * Solve 5 heart puzzles in order (tap two tiles to swap them).
+    3 cartoon hearts (3x3) then 2 anatomical hearts (4x4).
+  * Nothing starts until the admin presses START. The same countdown
+    is shown on every phone, driven by the server.
+  * At the end: own score, rank, top-3 and a downloadable certificate.
+
+ADMIN (exactly one account)
+  * Start / Pause / Resume / +1 min / End / Reset the game live.
+  * Live dashboard: registered, online, playing, finished + TOP 10.
+  * Players tab: search, ban/unban (kicks instantly), delete.
+  * Puzzles tab: enable/disable puzzles, change grid size (2x2..6x6).
+  * Settings tab: event name, college, date, signatory, duration,
+    event code, open/close registration, certificate switch.
+  * Download ALL certificates as one ZIP, results CSV, sample PDFs.
+  * "Projector" page (/admin/screen): giant timer + live top 10.
+
+RANKING
+  1) more puzzles solved wins, 2) lower total time wins.
+  Total time = game-clock at the player's last solved puzzle.
+  The clock stops while paused, so pausing is fair to everyone.
+
+ANTI-CHEAT / SECURITY
+  * The server issues the shuffle and stores it. The browser only
+    sends its list of swaps; the server replays them and decides
+    whether the puzzle is solved (no "I solved it" trusting).
+  * One admin enforced by a unique database index.
+  * Bcrypt passwords, short-lived access token (30 min) + 7-day
+    refresh token in an httpOnly cookie, silent auto-refresh,
+    banning a user invalidates all their tokens at once.
+
+---------------------------------------------------------------------
+ 2. PREREQUISITES
+---------------------------------------------------------------------
+  * Node.js 20 or newer   ->  https://nodejs.org   (check: node -v)
+  * MongoDB (pick ONE):
+      a) MongoDB Atlas free cluster (cloud)  -> https://mongodb.com/atlas
+      b) Docker:   docker compose up -d      (file included)
+      c) MongoDB Community Server installed locally
+  * An e-mail account for sending OTPs (Gmail with an "App Password"
+    is fine for ~300 students; see step 4).
+
+---------------------------------------------------------------------
+ 3. INSTALL
+---------------------------------------------------------------------
+  cd heart-puzzle
+  npm run install:all          (installs root + server + client)
+
+---------------------------------------------------------------------
+ 4. CONFIGURE  (server/.env)
+---------------------------------------------------------------------
+  cp server/.env.example server/.env        (Windows: copy ...)
+  Open server/.env and set: 
+
+  MONGO_URI            Atlas string or mongodb://127.0.0.1:27017/heart-puzzle
+  JWT_ACCESS_SECRET    long random text (generate:
+  JWT_REFRESH_SECRET   node -e "console.log(require('crypto').randomBytes(48).toString('hex'))")
+  ADMIN_EMAIL / ADMIN_PASSWORD / ADMIN_NAME
+                       The one admin, created automatically on the
+                       first start. Use a strong password.
+  ALLOWED_EMAIL_DOMAINS  e.g. mycollege.edu.in  (optional, recommended)
+  SMTP_HOST=smtp.gmail.com  SMTP_PORT=587
+  SMTP_USER=your@gmail.com  SMTP_PASS=<16-char Google App Password>
+  SMTP_FROM="Heart Puzzle <your@gmail.com>"
+
+  Gmail App Password: Google Account -> Security -> turn on 2-Step
+  Verification -> "App passwords" -> create one -> paste in SMTP_PASS.
+
+  Without SMTP_HOST, OTPs are printed in the server console and shown
+  on screen (NODE_ENV=development only) - handy for testing.
+  In production you MUST configure SMTP.
+
+---------------------------------------------------------------------
+ 5. RUN IN DEVELOPMENT (test everything first)
+---------------------------------------------------------------------
+  npm run dev
+     API + sockets : http://localhost:5000
+     Web app       : http://localhost:5173   (open this one)
+
+  1. Open http://localhost:5173/login, sign in with the admin e-mail
+     and password from .env.
+  2. Settings tab: set the event name, college, date, signatory,
+     duration and an EVENT CODE. Save. Click "Sample: winner" to
+     preview a certificate.
+  3. In a private window register a test student (OTP appears on
+     screen in dev mode), then press START in the admin window and
+     play. Watch the Top-10 update live.
+
+---------------------------------------------------------------------
+ 6. PRODUCTION BUILD (single server serves API + website)
+---------------------------------------------------------------------
+  npm run build                       (builds client/dist)
+  set NODE_ENV=production in server/.env
+  npm start                           (http://localhost:5000)
+
+---------------------------------------------------------------------
+ 7. EVENT-DAY HOSTING - CHOOSE ONE
+---------------------------------------------------------------------
+ A) CLOUD (most reliable, works on students' mobile data too)
+    1. Database: Atlas free cluster; Network Access -> allow
+       0.0.0.0/0 (or your host's IPs); copy the connection string.
+    2. Create a "Web Service" on Render / Railway / any Node host:
+         Build command : npm run install:all && npm run build
+         Start command : npm start
+         Env vars      : everything from server/.env, plus
+                         NODE_ENV=production
+                         COOKIE_SECURE=true        (site is https)
+                         CLIENT_ORIGIN=https://your-app-url
+    3. Use a plan that does not sleep (free plans sleep - wake the
+       site 10 minutes before the event).
+    4. Give students the URL as a QR code.
+
+ B) COLLEGE LAN (from your laptop)
+    1. Laptop + students on the same Wi-Fi; the laptop also needs
+       internet (for the OTP e-mails).
+    2. npm run build ; npm start
+    3. Find laptop IP (Windows: ipconfig, Mac/Linux: ifconfig), e.g.
+       192.168.1.20  -> students open  http://192.168.1.20:5000
+    4. Allow port 5000 in the laptop firewall. Keep COOKIE_SECURE=false
+       (plain http). Disable "client isolation" on the Wi-Fi/AP.
+    5. Turn off laptop sleep and keep it plugged in.
+
+---------------------------------------------------------------------
+ 8. EVENT-DAY RUNBOOK
+---------------------------------------------------------------------
+  T-1 day : Deploy, log in as admin, fill Settings, download the
+            sample certificates, do a full dry run with 2-3 phones,
+            then press RESET so the real round starts clean.
+  T-30 min: Show the URL/QR and EVENT CODE on the projector.
+            Students register + verify their e-mail early.
+            Open /admin/screen on the projector.
+  Start   : Wait until "Online now" looks right, press START.
+  During  : Pause (announcement), +1 min, ban a cheater if needed.
+  End     : Timer ends automatically (or press END). Certificates
+            are switched on automatically; players download their
+            own. Announce the top 3 from the projector.
+  After   : Settings tab -> "All certificates (ZIP)" and
+            "Results CSV". Close registration if you like.
+
+---------------------------------------------------------------------
+ 9. CUSTOMISING PUZZLES
+---------------------------------------------------------------------
+  * Images live in client/public/puzzles/ (SVG, WEBP, PNG, JPG).
+  * The list of puzzles is seeded from server/src/utils/seed.js.
+    To change images: edit that list, delete the "puzzles" collection
+    (or the whole database while testing) and restart the server.
+  * aspect = image width / height. grid = tiles per side.
+  * Tip: a small watermark (e.g. from stock sites) is visible on the
+    round-1 image; use a licensed/clean image for a public event.
+
+---------------------------------------------------------------------
+ 10. PROJECT STRUCTURE
+---------------------------------------------------------------------
+  server/src/
+    index.js        boot: DB, seed, sockets, auto-end timer
+    app.js          Express middleware + routes + serves client/dist
+    socket.js       Socket.io auth, rooms, live state/leaderboard
+    models/         User, Puzzle, Game (singleton), Attempt
+    routes/         auth, game (player), admin, certificate
+    utils/          game clock, ranking, tokens, mailer, certificate PDF
+  client/src/
+    pages/          Login, Register, Verify, Play, Admin, Screen
+    components/     Puzzle board, Clock, Leaderboard
+    api.js          axios + automatic token refresh
+    useGame.js      live server-driven game clock/state
+
+  API summary
+    POST /api/auth/register | verify-otp | resend-otp | login |
+         refresh | logout ;  GET /api/auth/me
+    GET  /api/game/state | me | puzzle/current ; POST /api/game/puzzle/submit
+    GET  /api/certificates/me
+    ADMIN: GET /api/admin/overview | users | export.csv |
+           certificates.zip | certificates/sample.pdf
+           POST /api/admin/game/{start|pause|resume|end|reset}
+           PUT  /api/admin/settings | puzzles/:id
+           POST /api/admin/users/:id/ban ; DELETE /api/admin/users/:id
+
+---------------------------------------------------------------------
+ 11. TROUBLESHOOTING
+---------------------------------------------------------------------
+  "MongoServerSelectionError"  -> MongoDB not running / wrong URI /
+                                  Atlas IP not allowed.
+  No OTP e-mail                -> check SMTP_* values and the Gmail App
+                                  Password; look in spam; see server log.
+  Admin cannot log in          -> admin is created only if none exists.
+                                  Fix ADMIN_* in .env, delete the admin
+                                  document in the "users" collection,
+                                  restart.
+  Phones cannot open the LAN URL -> firewall port 5000, same Wi-Fi,
+                                  AP client isolation off.
+  Live updates missing         -> a proxy blocking WebSockets; the app
+                                  falls back to long-polling automatically.
+  Students share one IP        -> rate limits are already generous
+                                  (1000 requests / 15 min per IP on auth).
