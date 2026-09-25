@@ -4,7 +4,7 @@ import { getToken, refreshToken } from './api';
 let socket;
 export function getSocket() {
   if (!socket) {
-    socket = io({ auth: (cb) => cb({ token: getToken() }), transports: ['websocket', 'polling'] });
+    socket = io(import.meta.env.VITE_API_URL,{ auth: (cb) => cb({ token: getToken() }), transports: ['websocket', 'polling'] });
     // Expired token on (re)connect -> refresh silently, then reconnect.
     socket.on('connect_error', async (e) => {
       if (e.message === 'unauthorized') {
